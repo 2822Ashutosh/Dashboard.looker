@@ -281,56 +281,56 @@
       </div>
     </div>
     <div class="exec-kpi-row">
-      <div class="exec-kpi exec-kpi-cyan">
+      <div class="exec-kpi exec-kpi-cyan" data-kpi="team">
         <div class="exec-kpi-icon">👥</div>
         <div class="exec-kpi-info">
           <div class="exec-kpi-val" id="valTeamSize">—</div>
           <div class="exec-kpi-lbl">Team Size</div>
         </div>
       </div>
-      <div class="exec-kpi exec-kpi-purple">
+      <div class="exec-kpi exec-kpi-purple" data-kpi="projects">
         <div class="exec-kpi-icon">📂</div>
         <div class="exec-kpi-info">
           <div class="exec-kpi-val" id="valActiveProjects">—</div>
           <div class="exec-kpi-lbl">Active Projects</div>
         </div>
       </div>
-      <div class="exec-kpi exec-kpi-green">
+      <div class="exec-kpi exec-kpi-green" data-kpi="sow">
         <div class="exec-kpi-icon">💰</div>
         <div class="exec-kpi-info">
           <div class="exec-kpi-val" id="valSOWValue">—</div>
           <div class="exec-kpi-lbl">SOW Value</div>
         </div>
       </div>
-      <div class="exec-kpi exec-kpi-blue">
+      <div class="exec-kpi exec-kpi-blue" data-kpi="kpi">
         <div class="exec-kpi-icon">🎯</div>
         <div class="exec-kpi-info">
           <div class="exec-kpi-val" id="valKPIMetRate">—</div>
           <div class="exec-kpi-lbl">KPI Met Rate</div>
         </div>
       </div>
-      <div class="exec-kpi exec-kpi-teal">
+      <div class="exec-kpi exec-kpi-teal" data-kpi="ftr">
         <div class="exec-kpi-icon">✅</div>
         <div class="exec-kpi-info">
           <div class="exec-kpi-val" id="valFTRRating">—</div>
           <div class="exec-kpi-lbl">FTR Rating</div>
         </div>
       </div>
-      <div class="exec-kpi exec-kpi-amber">
+      <div class="exec-kpi exec-kpi-amber" data-kpi="leave">
         <div class="exec-kpi-icon">🏖️</div>
         <div class="exec-kpi-info">
           <div class="exec-kpi-val" id="valOnLeave">—</div>
           <div class="exec-kpi-lbl">On Leave Today</div>
         </div>
       </div>
-      <div class="exec-kpi exec-kpi-red">
+      <div class="exec-kpi exec-kpi-red" data-kpi="risks">
         <div class="exec-kpi-icon">⚠️</div>
         <div class="exec-kpi-info">
           <div class="exec-kpi-val" id="valActiveRisks">—</div>
           <div class="exec-kpi-lbl">Active Risks</div>
         </div>
       </div>
-      <div class="exec-kpi exec-kpi-pink">
+      <div class="exec-kpi exec-kpi-pink" data-kpi="highlights">
         <div class="exec-kpi-icon">📋</div>
         <div class="exec-kpi-info">
           <div class="exec-kpi-val" id="valSOWReceived">—</div>
@@ -338,6 +338,19 @@
         </div>
       </div>
     </div>
+
+    <!-- KPI Detail Panel -->
+    <div id="kpiDetailPanel" class="kpi-detail-panel" style="display:none">
+      <div class="kpi-detail-header">
+        <span id="kpiDetailTitle" class="kpi-detail-title">Detail</span>
+        <button id="kpiDetailClose" class="kpi-detail-close">&times;</button>
+      </div>
+      <div class="kpi-detail-body">
+        <div class="kpi-detail-chart"><canvas id="kpiDetailChart"></canvas></div>
+        <div id="kpiDetailTable" class="kpi-detail-table"></div>
+      </div>
+    </div>
+
     <div class="exec-charts-grid">
       <div class="exec-chart-card exec-chart-wide">
         <div class="exec-chart-hdr"><span>📈 FTE Utilization Trend</span><span

@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════
+﻿/* ═══════════════════════════════════════════════════════════════
    Digital Enablement Team Dashboard — app.js
    ═══════════════════════════════════════════════════════════════ */
 
@@ -646,6 +646,7 @@ async function fetchExecData() {
         renderExecLeavePanel(leave);
         renderExecHealthTable(health);
         renderExecHL(gov);
+        if(typeof cacheExecData==='function'){cacheExecData('team',team);cacheExecData('kpi',kpi);cacheExecData('sow',sow);cacheExecData('gov',gov);cacheExecData('leave',leave);cacheExecData('ftr',ftr);cacheExecData('health',health);}
         const ts = document.getElementById('execLastRefresh');
         if (ts) ts.textContent = new Date().toLocaleTimeString();
     } catch (err) {
@@ -898,3 +899,109 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('DOMContentLoaded', loadTrackers);
 })();
+
+//  KPI Card Click  Detail Panel 
+var _execCache = {};
+let _kpiDetailChart = null;
+
+// Store fetched data globally for KPI clicks
+function cacheExecData(key, data) { _execCache[key] = data; }
+
+document.querySelectorAll('.exec-kpi[data-kpi]').forEach(card => {
+    card.addEventListener('click', () => {
+        const key = card.dataset.kpi;
+        const panel = document.getElementById('kpiDetailPanel');
+        const isOpen = panel.style.display === 'block' && card.classList.contains('kpi-active');
+        document.querySelectorAll('.exec-kpi').forEach(c => c.classList.remove('kpi-active'));
+        if (isOpen) { panel.style.display = 'none'; return; }
+        card.classList.add('kpi-active');
+        panel.style.display = 'block';
+        renderKPIDetail(key);
+    });
+});
+
+document.getElementById('kpiDetailClose')?.addEventListener('click', () => {
+    document.getElementById('kpiDetailPanel').style.display = 'none';
+    document.querySelectorAll('.exec-kpi').forEach(c => c.classList.remove('kpi-active'));
+});
+
+function renderKPIDetail(key) {
+    const title = document.getElementById('kpiDetailTitle');
+    const tableDiv = document.getElementById('kpiDetailTable');
+    const ctx = document.getElementById('kpiDetailChart');
+    if (_kpiDetailChart) { _kpiDetailChart.destroy(); _kpiDetailChart = null; }
+
+    const configs = {
+        team: () => {
+            title.textContent = ' Team Breakdown';
+            const d = _execCache.team || {};
+            const roles = d.roleDistribution || {};
+            const labels = Object.keys(roles), vals = Object.values(roles);
+            _kpiDetailChart = new Chart(ctx, { type:'doughnut', data:{ labels, datasets:[{ data:vals, backgroundColor:['#06b6d4','#a855f7','#22c55e','#f59e0b','#ec4899','#3b82f6','#ef4444','#14b8a6'] }] }, options:{ responsive:true, plugins:{ legend:{ position:'bottom' } } } });
+            const members = d.activeMembers || [];
+            tableDiv.innerHTML = '<table><thead><tr><th>Name</th><th>Role</th><th>Location</th></tr></thead><tbody>' + members.slice(0,15).map(m => '<tr><td>'+m.name+'</td><td>'+m.role+'</td><td>'+(m.location||'-')+'</td></tr>').join('') + '</tbody></table>';
+        },
+        projects: () => {
+            title.textContent = ' Active Projects';
+            const d = _execCache.health || [];
+            const statuses = {}; d.forEach(p => { statuses[p.health||'Unknown'] = (statuses[p.health||'Unknown']||0)+1; });
+            _kpiDetailChart = new Chart(ctx, { type:'doughnut', data:{ labels:Object.keys(statuses), datasets:[{ data:Object.values(statuses), backgroundColor:['#22c55e','#f59e0b','#ef4444','#94a3b8'] }] }, options:{ responsive:true, plugins:{ legend:{ position:'bottom' } } } });
+            tableDiv.innerHTML = '<table><thead><tr><th>Project</th><th>Client</th><th>PM</th><th>Health</th></tr></thead><tbody>' + d.map(p => '<tr><td>'+p.project+'</td><td>'+(p.client||'-')+'</td><td>'+(p.pm||'-')+'</td><td>'+(p.health||'-')+'</td></tr>').join('') + '</tbody></table>';
+        },
+        sow: () => {
+            title.textContent = ' SOW & PO Financial Details';
+            const d = _execCache.sow || {};
+            const projects = d.projects || [];
+            const labels = projects.slice(0,10).map(p => (p.project||'').slice(0,20));
+            const vals = projects.slice(0,10).map(p => p.sowValue||0);
+            _kpiDetailChart = new Chart(ctx, { type:'bar', data:{ labels, datasets:[{ label:'SOW Value', data:vals, backgroundColor:'#22c55e', borderRadius:6 }] }, options:{ responsive:true, plugins:{ legend:{ display:false } } } });
+            tableDiv.innerHTML = '<table><thead><tr><th>Project</th><th>SOW</th><th>PO</th><th>Status</th></tr></thead><tbody>' + projects.map(p => '<tr><td>'+p.project+'</td><td>$'+(p.sowValue||0).toLocaleString()+'</td><td>'+(p.poNumber||'-')+'</td><td>'+(p.status||'-')+'</td></tr>').join('') + '</tbody></table>';
+        },
+        kpi: () => {
+            title.textContent = ' KPI Scorecards � All Metrics';
+            const d = _execCache.kpi || {};
+            const metrics = d.metrics || d.kpis || [];
+            const labels = metrics.slice(0,10).map(m => (m.metric||m.name||'').slice(0,20));
+            const targets = metrics.slice(0,10).map(m => m.target||0);
+            const actuals = metrics.slice(0,10).map(m => m.actual||0);
+            _kpiDetailChart = new Chart(ctx, { type:'bar', data:{ labels, datasets:[{ label:'Target', data:targets, backgroundColor:'rgba(59,130,246,.5)', borderRadius:4 },{ label:'Actual', data:actuals, backgroundColor:'#06b6d4', borderRadius:4 }] }, options:{ responsive:true, plugins:{ legend:{ position:'bottom' } } } });
+            tableDiv.innerHTML = '<table><thead><tr><th>Metric</th><th>Target</th><th>Actual</th><th>Status</th></tr></thead><tbody>' + metrics.map(m => '<tr><td>'+(m.metric||m.name)+'</td><td>'+(m.target||'-')+'</td><td>'+(m.actual||'-')+'</td><td>'+(m.status||'-')+'</td></tr>').join('') + '</tbody></table>';
+        },
+        ftr: () => {
+            title.textContent = ' FTR / QA Metrics';
+            const d = _execCache.ftr || {};
+            const accounts = d.accounts || [];
+            const labels = accounts.map(a => (a.account||'').slice(0,18));
+            const vals = accounts.map(a => a.avgRating||0);
+            _kpiDetailChart = new Chart(ctx, { type:'bar', data:{ labels, datasets:[{ label:'QA Rating %', data:vals, backgroundColor:vals.map(v=>v>=90?'#22c55e':v>=75?'#f59e0b':'#ef4444'), borderRadius:6 }] }, options:{ responsive:true, indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ max:100 } } } });
+            tableDiv.innerHTML = '<table><thead><tr><th>Account</th><th>Avg Rating</th><th>FTR Pass</th></tr></thead><tbody>' + accounts.map(a => '<tr><td>'+a.account+'</td><td>'+(a.avgRating||0)+'%</td><td>'+(a.ftrPass||'-')+'</td></tr>').join('') + '</tbody></table>';
+        },
+        leave: () => {
+            title.textContent = ' Leave Detail � This Month';
+            const d = _execCache.leave || {};
+            const byP = (d.currentMonth && d.currentMonth.byPerson) || {};
+            const sorted = Object.entries(byP).filter(function(e){return e[1]>0}).sort(function(a,b){return b[1]-a[1]}).slice(0,12);
+            const labels = sorted.map(function(e){return e[0].split(' ').slice(0,2).join(' ')});
+            const vals = sorted.map(function(e){return e[1]});
+            _kpiDetailChart = new Chart(ctx, { type:'bar', data:{ labels:labels, datasets:[{ label:'Days', data:vals, backgroundColor:'#f59e0b', borderRadius:6 }] }, options:{ responsive:true, plugins:{ legend:{ display:false } } } });
+            tableDiv.innerHTML = '<table><thead><tr><th>Person</th><th>Days</th></tr></thead><tbody>' + sorted.map(function(e){return '<tr><td>'+e[0]+'</td><td>'+e[1]+'</td></tr>'}).join('') + '</tbody></table>';
+        },
+        risks: () => {
+            title.textContent = ' Active Risk Details';
+            const d = _execCache.gov || {};
+            const risks = d.risks || [];
+            tableDiv.innerHTML = '<table><thead><tr><th>Risk</th><th>Owner</th><th>Impact</th><th>Status</th></tr></thead><tbody>' + risks.map(r => '<tr><td>'+(r.description||r.risk||'-')+'</td><td>'+(r.owner||'-')+'</td><td>'+(r.impact||'-')+'</td><td>'+(r.status||'-')+'</td></tr>').join('') + '</tbody></table>';
+            const severity = {}; risks.forEach(r => { severity[r.impact||'Unknown'] = (severity[r.impact||'Unknown']||0)+1; });
+            _kpiDetailChart = new Chart(ctx, { type:'pie', data:{ labels:Object.keys(severity), datasets:[{ data:Object.values(severity), backgroundColor:['#ef4444','#f59e0b','#22c55e','#94a3b8'] }] }, options:{ responsive:true, plugins:{ legend:{ position:'bottom' } } } });
+        },
+        highlights: () => {
+            title.textContent = ' Highlights & Lowlights';
+            const d = _execCache.gov || {};
+            const hl = d.highlights || []; const ll = d.lowlights || [];
+            tableDiv.innerHTML = '<h4 style="margin:0 0 6px;font-size:.82rem"> Highlights</h4><ul style="margin:0 0 12px;padding-left:18px;font-size:.78rem">' + hl.map(h => '<li>'+(h.highlight||h)+'</li>').join('') + '</ul><h4 style="margin:0 0 6px;font-size:.82rem"> Lowlights</h4><ul style="margin:0;padding-left:18px;font-size:.78rem">' + ll.map(l => '<li>'+(l.lowlight||l)+'</li>').join('') + '</ul>';
+            _kpiDetailChart = new Chart(ctx, { type:'doughnut', data:{ labels:['Highlights','Lowlights'], datasets:[{ data:[hl.length, ll.length], backgroundColor:['#22c55e','#ef4444'] }] }, options:{ responsive:true, plugins:{ legend:{ position:'bottom' } } } });
+        }
+    };
+
+    if (configs[key]) configs[key]();
+}
