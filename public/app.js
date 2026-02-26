@@ -500,3 +500,266 @@ function fmtDisplay(dateStr) {
         return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
     } catch { return dateStr; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PHASE 2: EXECUTIVE DASHBOARD — INTEGRATED
+   ═══════════════════════════════════════════════════════════════ */
+
+const EXEC_TOKEN_KEY = 'exec_token';
+let execChartFTE = null, execChartKPI = null, execChartSOW = null;
+
+// ── Init exec UI bindings ───────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if already logged in
+    const savedToken = sessionStorage.getItem(EXEC_TOKEN_KEY);
+    if (savedToken) {
+        fetch('/api/auth/verify', { headers: { Authorization: 'Bearer ' + savedToken } })
+            .then(r => r.json())
+            .then(d => { if (d.valid) showExecDashboard(); })
+            .catch(() => { });
+    }
+
+    // Login modal
+    const btnLogin = document.getElementById('btnManagerLogin');
+    const btnLogout = document.getElementById('btnExecLogout');
+    const modal = document.getElementById('loginModal');
+    const btnSubmit = document.getElementById('loginSubmit');
+    const btnClose = document.getElementById('loginClose');
+
+    if (btnLogin) btnLogin.addEventListener('click', () => { modal.style.display = 'flex'; document.getElementById('loginUser').focus(); });
+    if (btnClose) btnClose.addEventListener('click', () => { modal.style.display = 'none'; });
+    if (modal) modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+    if (btnSubmit) btnSubmit.addEventListener('click', execDoLogin);
+    const passInput = document.getElementById('loginPass');
+    if (passInput) passInput.addEventListener('keydown', e => { if (e.key === 'Enter') execDoLogin(); });
+    if (btnLogout) btnLogout.addEventListener('click', execLogout);
+
+    // Exec buttons
+    const btnRefresh = document.getElementById('btnExecRefresh');
+    if (btnRefresh) btnRefresh.addEventListener('click', fetchExecData);
+    const btnPrint = document.getElementById('btnExecPrint');
+    if (btnPrint) btnPrint.addEventListener('click', () => window.print());
+    const btnSources = document.getElementById('btnExecSources');
+    if (btnSources) btnSources.addEventListener('click', () => { document.getElementById('execSourceModal').style.display = 'flex'; });
+    const btnCloseSrc = document.getElementById('closeExecSrcModal');
+    if (btnCloseSrc) btnCloseSrc.addEventListener('click', () => { document.getElementById('execSourceModal').style.display = 'none'; });
+    const srcModal = document.getElementById('execSourceModal');
+    if (srcModal) srcModal.addEventListener('click', e => { if (e.target === srcModal) srcModal.style.display = 'none'; });
+
+    // Tabs
+    document.querySelectorAll('.exec-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.exec-tab').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.exec-tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            const tabId = btn.dataset.tab === 'upload' ? 'tabUpload' : 'tabUrls';
+            document.getElementById(tabId).classList.add('active');
+        });
+    });
+
+    // Upload + Connect
+    const btnUpload = document.getElementById('btnUploadAll');
+    if (btnUpload) btnUpload.addEventListener('click', execUploadFiles);
+    const btnConnect = document.getElementById('btnConnectUrls');
+    if (btnConnect) btnConnect.addEventListener('click', execConnectUrls);
+});
+
+// ── Login ────────────────────────────────────────────────────────
+async function execDoLogin() {
+    const username = document.getElementById('loginUser').value.trim();
+    const password = document.getElementById('loginPass').value;
+    const errEl = document.getElementById('loginError');
+    errEl.style.display = 'none';
+
+    if (!username || !password) { errEl.textContent = 'Enter both User ID and Password'; errEl.style.display = 'block'; return; }
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (res.ok && data.token) {
+            sessionStorage.setItem(EXEC_TOKEN_KEY, data.token);
+            document.getElementById('loginModal').style.display = 'none';
+            showExecDashboard();
+        } else {
+            errEl.textContent = data.error || 'Login failed';
+            errEl.style.display = 'block';
+        }
+    } catch (e) {
+        errEl.textContent = 'Network error';
+        errEl.style.display = 'block';
+    }
+}
+
+function execLogout() {
+    sessionStorage.removeItem(EXEC_TOKEN_KEY);
+    document.getElementById('execSection').style.display = 'none';
+    document.getElementById('btnManagerLogin').style.display = '';
+    document.getElementById('btnExecLogout').style.display = 'none';
+}
+
+function showExecDashboard() {
+    document.getElementById('execSection').style.display = 'block';
+    document.getElementById('btnManagerLogin').style.display = 'none';
+    document.getElementById('btnExecLogout').style.display = '';
+    fetchExecData();
+}
+
+// ── Fetch all executive data ─────────────────────────────────────
+async function fetchExecData() {
+    const token = sessionStorage.getItem(EXEC_TOKEN_KEY);
+    if (!token) return;
+    const h = { Authorization: 'Bearer ' + token };
+    try {
+        const [summary, kpi, sow, gov, leave, ftr, health] = await Promise.all([
+            fetch('/api/exec/summary', { headers: h }).then(r => r.json()),
+            fetch('/api/exec/kpi-scorecards', { headers: h }).then(r => r.json()),
+            fetch('/api/exec/sow-financial', { headers: h }).then(r => r.json()),
+            fetch('/api/exec/governance-risks', { headers: h }).then(r => r.json()),
+            fetch('/api/exec/leave-impact', { headers: h }).then(r => r.json()),
+            fetch('/api/exec/ftr-metrics', { headers: h }).then(r => r.json()),
+            fetch('/api/exec/project-health', { headers: h }).then(r => r.json()),
+        ]);
+        renderExecKPIs(summary);
+        renderExecFTEChart(gov);
+        renderExecKPIChart(kpi);
+        renderExecSOWChart(sow);
+        renderExecRiskPanel(gov);
+        renderExecLeavePanel(leave);
+        renderExecHealthTable(health);
+        renderExecHL(gov);
+    } catch (err) {
+        console.error('Exec fetch error:', err);
+    }
+}
+
+// ── KPI Cards ────────────────────────────────────────────────────
+function renderExecKPIs(d) {
+    if (!d) return;
+    const el = id => document.getElementById(id);
+    el('valTeamSize').textContent = d.teamSize || 0;
+    el('valActiveProjects').textContent = d.activeProjects || 0;
+    el('valSOWValue').textContent = d.totalSOWValue ? fmtCurrency(d.totalSOWValue) : '—';
+    el('valKPIMetRate').textContent = d.kpiMetRate ? d.kpiMetRate + '%' : '—';
+    el('valFTRRating').textContent = d.ftrAvgRating ? d.ftrAvgRating + '%' : '—';
+    el('valOnLeave').textContent = d.onLeaveToday || 0;
+}
+function fmtCurrency(v) { return v >= 1e6 ? '$' + (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + (v / 1e3).toFixed(0) + 'K' : '$' + v; }
+
+// ── Charts ──────────────────────────────────────────────────────
+function renderExecFTEChart(gov) {
+    const ctx = document.getElementById('chartFTETrend');
+    if (!ctx) return;
+    const trend = gov?.fteTrend || [];
+    if (execChartFTE) execChartFTE.destroy();
+    execChartFTE = new Chart(ctx, { type: 'line', data: { labels: trend.map(t => t.month), datasets: [{ label: 'Total FTE', data: trend.map(t => t.totalFTE), borderColor: '#0891b2', backgroundColor: 'rgba(8,145,178,.1)', fill: true, tension: .4, pointRadius: 4, pointBackgroundColor: '#0891b2' }] }, options: { responsive: true, plugins: { legend: { labels: { font: { size: 11 } } } }, scales: { y: { beginAtZero: true } } } });
+}
+
+function renderExecKPIChart(kpiData) {
+    const ctx = document.getElementById('chartKPI');
+    if (!ctx) return;
+    const kpis = (kpiData?.kpis || []).slice(0, 10);
+    if (execChartKPI) execChartKPI.destroy();
+    execChartKPI = new Chart(ctx, { type: 'bar', data: { labels: kpis.map(k => k.metricName?.slice(0, 22) || ''), datasets: [{ label: 'Target %', data: kpis.map(k => k.target * 100), backgroundColor: 'rgba(168,85,247,.6)', borderRadius: 4 }, { label: 'Actual %', data: kpis.map(k => k.actual * 100), backgroundColor: 'rgba(8,145,178,.7)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, scales: { x: { max: 120 } } } });
+}
+
+function renderExecSOWChart(sowData) {
+    const ctx = document.getElementById('chartSOW');
+    if (!ctx) return;
+    const sm = sowData?.summary?.projectsByStatus || {};
+    const labels = Object.keys(sm), values = Object.values(sm);
+    const colors = ['#22c55e', '#f59e0b', '#0891b2', '#a855f7', '#ef4444', '#ec4899'];
+    if (execChartSOW) execChartSOW.destroy();
+    execChartSOW = new Chart(ctx, { type: 'doughnut', data: { labels, datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderWidth: 0 }] }, options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, padding: 10 } } } } });
+}
+
+// ── Risk Panel ──────────────────────────────────────────────────
+function renderExecRiskPanel(gov) {
+    const risks = (gov?.risks || []).filter(r => r.status?.toLowerCase() === 'ongoing');
+    const body = document.getElementById('riskPanelBody');
+    const badge = document.getElementById('riskCount');
+    if (badge) badge.textContent = risks.length;
+    if (!risks.length) { body.innerHTML = '<div style="color:#999">No active risks ✅</div>'; return; }
+    body.innerHTML = risks.map(r => {
+        const ic = r.impact?.toLowerCase().includes('loss') ? 'exec-impact-high' : r.impact?.toLowerCase().includes('delay') ? 'exec-impact-med' : 'exec-impact-low';
+        return `<div class="exec-risk-item"><div class="exec-risk-project">${esc(r.project)} <span style="color:#999;font-weight:400">— ${esc(r.pm)}</span></div><div class="exec-risk-text">${esc(r.risk)}</div><span class="exec-risk-impact ${ic}">${esc(r.impact || 'Unknown')}</span></div>`;
+    }).join('');
+}
+
+// ── Leave Panel ─────────────────────────────────────────────────
+function renderExecLeavePanel(leave) {
+    const body = document.getElementById('leavePanelBody');
+    const cm = leave?.currentMonth || {};
+    const byP = cm.byPerson || {};
+    const onT = cm.onLeaveToday || [];
+    let html = '';
+    if (onT.length) {
+        html += `<div style="margin-bottom:8px;color:#f59e0b;font-weight:600">📌 On Leave Today (${onT.length}):</div>`;
+        html += onT.map(p => `<div class="exec-leave-item"><span class="exec-leave-name">${esc(p.name)}</span><span style="color:#999">${esc(p.type)}</span></div>`).join('');
+        html += '<hr style="border-color:#eee;margin:10px 0">';
+    }
+    html += `<div style="margin-bottom:6px;font-weight:600;color:#333">Month Total: ${cm.totalLeaves || 0} leaves</div>`;
+    const sorted = Object.entries(byP).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    if (!sorted.length) html += '<div style="color:#999">No leave data.</div>';
+    else html += sorted.map(([n, c]) => `<div class="exec-leave-item"><span class="exec-leave-name">${esc(n)}</span><span class="exec-leave-count">${c} day(s)</span></div>`).join('');
+    body.innerHTML = html;
+}
+
+// ── Health Table ────────────────────────────────────────────────
+function renderExecHealthTable(health) {
+    const tbody = document.getElementById('healthTableBody');
+    if (!health?.length) { tbody.innerHTML = '<tr><td colspan="8" style="color:#999;text-align:center;padding:16px">No project data</td></tr>'; return; }
+    tbody.innerHTML = health.map(p => {
+        const cls = p.health === 'Green' ? 'exec-hb-green' : p.health === 'Red' ? 'exec-hb-red' : 'exec-hb-amber';
+        return `<tr><td><strong>${esc(p.projectName)}</strong></td><td>${esc(p.client)}</td><td>${esc(p.pm)}</td><td>${esc(p.status)}</td><td>${esc(p.sowStatus)}</td><td>${esc(p.poStatus)}</td><td><span class="exec-hb ${cls}">${p.health}</span></td><td style="font-size:.72rem;color:#999">${esc(p.reasons)}</td></tr>`;
+    }).join('');
+}
+
+// ── Highlights / Lowlights ──────────────────────────────────────
+function renderExecHL(gov) {
+    const hl = gov?.highlights || [];
+    const hlEl = document.getElementById('highlightsList');
+    const hItems = hl.filter(h => h.highlight);
+    hlEl.innerHTML = hItems.length ? hItems.slice(0, 10).map(h => `<div class="exec-hl-item"><div class="exec-hl-proj">${esc(h.project)} — ${esc(h.month)}</div><div class="exec-hl-text">${esc(h.highlight)}</div></div>`).join('') : '<div style="color:#999">No highlights.</div>';
+    const llEl = document.getElementById('lowlightsList');
+    const lItems = hl.filter(h => h.lowlight);
+    llEl.innerHTML = lItems.length ? lItems.slice(0, 10).map(h => `<div class="exec-hl-item"><div class="exec-hl-proj">${esc(h.project)} — ${esc(h.month)}</div><div class="exec-hl-text">${esc(h.lowlight)}</div></div>`).join('') : '<div style="color:#999">No lowlights.</div>';
+}
+
+// ── Data Source Upload ──────────────────────────────────────────
+async function execUploadFiles() {
+    const form = document.getElementById('uploadForm');
+    const fd = new FormData(form);
+    const st = document.getElementById('execSrcStatus');
+    let hasFile = false;
+    for (const [, f] of fd.entries()) { if (f && f.size > 0) { hasFile = true; break; } }
+    if (!hasFile) { st.className = 'exec-src-status error'; st.textContent = 'Select at least one file.'; st.style.display = 'block'; return; }
+    st.className = 'exec-src-status'; st.textContent = 'Uploading…'; st.style.display = 'block';
+    try {
+        const res = await fetch('/api/exec/upload-sources', { method: 'POST', headers: { Authorization: 'Bearer ' + sessionStorage.getItem(EXEC_TOKEN_KEY) }, body: fd });
+        const data = await res.json();
+        if (data.success) { st.className = 'exec-src-status success'; st.textContent = '✓ ' + data.message; setTimeout(() => { fetchExecData(); document.getElementById('execSourceModal').style.display = 'none'; }, 1200); }
+        else { st.className = 'exec-src-status error'; st.textContent = '✗ ' + (data.error || 'Failed'); }
+    } catch (e) { st.className = 'exec-src-status error'; st.textContent = '✗ ' + e.message; }
+}
+
+async function execConnectUrls() {
+    const sources = {};
+    [['ftr', 'urlFtr'], ['team', 'urlTeam'], ['sow', 'urlSow'], ['governance', 'urlGovernance'], ['leave', 'urlLeave'], ['kpi', 'urlKpi']].forEach(([k, id]) => {
+        const v = document.getElementById(id).value.trim();
+        if (v) sources[k] = { url: v, type: 'sharepoint' };
+    });
+    const st = document.getElementById('execSrcStatus');
+    if (!Object.keys(sources).length) { st.className = 'exec-src-status error'; st.textContent = 'Enter at least one URL.'; st.style.display = 'block'; return; }
+    st.className = 'exec-src-status'; st.textContent = 'Connecting…'; st.style.display = 'block';
+    try {
+        const res = await fetch('/api/exec/connect-sources', { method: 'POST', headers: { Authorization: 'Bearer ' + sessionStorage.getItem(EXEC_TOKEN_KEY), 'Content-Type': 'application/json' }, body: JSON.stringify({ sources }) });
+        const data = await res.json();
+        if (data.success) { st.className = 'exec-src-status success'; st.textContent = '✓ ' + data.message; setTimeout(() => { fetchExecData(); document.getElementById('execSourceModal').style.display = 'none'; }, 1200); }
+        else { st.className = 'exec-src-status error'; st.textContent = '✗ ' + (data.error || 'Failed'); }
+    } catch (e) { st.className = 'exec-src-status error'; st.textContent = '✗ ' + e.message; }
+}
+
