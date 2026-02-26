@@ -1968,11 +1968,19 @@ footer {
 /* Responsive exec */
 @media (max-width: 1100px) {
   .exec-kpi-row {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 
-  .exec-charts-row {
+  .exec-charts-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .exec-charts-4col {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .exec-chart-wide {
+    grid-column: span 1;
   }
 
   .exec-chart-sm {
@@ -1985,7 +1993,8 @@ footer {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .exec-charts-row {
+  .exec-charts-grid,
+  .exec-charts-4col {
     grid-template-columns: 1fr;
   }
 
@@ -1994,7 +2003,315 @@ footer {
     grid-template-columns: 1fr;
   }
 
-  .exec-upload-grid {
-    grid-template-columns: 1fr;
+  .exec-upload-cards {
+    grid-template-columns: 1fr 1fr;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PHASE 2: NEW — Gradient KPI Cards
+   ══════════════════════════════════════════════════════════════════ */
+.exec-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.exec-kpi {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: all .25s;
+}
+
+.exec-kpi:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .1);
+}
+
+.exec-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.exec-kpi-cyan::before {
+  background: linear-gradient(90deg, #06b6d4, #0891b2);
+}
+
+.exec-kpi-purple::before {
+  background: linear-gradient(90deg, #a855f7, #7c3aed);
+}
+
+.exec-kpi-green::before {
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.exec-kpi-blue::before {
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+
+.exec-kpi-teal::before {
+  background: linear-gradient(90deg, #14b8a6, #0d9488);
+}
+
+.exec-kpi-amber::before {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.exec-kpi-red::before {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.exec-kpi-pink::before {
+  background: linear-gradient(90deg, #ec4899, #db2777);
+}
+
+.exec-kpi-icon {
+  font-size: 1.6rem;
+  min-width: 36px;
+  text-align: center;
+}
+
+.exec-kpi-info {
+  flex: 1;
+}
+
+.exec-kpi-val {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.exec-kpi-lbl {
+  font-size: .7rem;
+  color: var(--text-sec);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-top: 2px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PHASE 2: NEW — Chart Grid Layout
+   ══════════════════════════════════════════════════════════════════ */
+.exec-charts-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.exec-charts-4col {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.exec-chart-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+  transition: all .2s;
+}
+
+.exec-chart-card:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 4px 16px rgba(0, 188, 212, .08);
+}
+
+.exec-chart-wide {
+  grid-column: span 1;
+}
+
+.exec-chart-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.exec-chart-hdr span:first-child {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.exec-chart-badge {
+  font-size: .62rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(0, 188, 212, .1), rgba(168, 85, 247, .1));
+  color: var(--cyan-dark);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+#execSection canvas {
+  width: 100% !important;
+  max-height: 260px;
+}
+
+/* Section divider header */
+.exec-divider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 14px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(0, 188, 212, .04), rgba(168, 85, 247, .04));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.exec-divider-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.exec-divider-icon {
+  font-size: 1.4rem;
+}
+
+.exec-divider-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.exec-divider-sub {
+  font-size: .75rem;
+  color: var(--text-sec);
+  font-weight: 500;
+}
+
+.exec-divider-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.exec-action-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.exec-action-btn:hover {
+  border-color: var(--cyan);
+  background: rgba(0, 188, 212, .06);
+  transform: translateY(-1px);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PHASE 2: NEW — Upload Cards (modal)
+   ══════════════════════════════════════════════════════════════════ */
+.exec-upload-modal {
+  width: 640px;
+  max-width: 95vw;
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .3);
+  animation: slideUp .3s ease;
+}
+
+.exec-upload-modal-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--cyan), var(--cyan-dark));
+  color: #fff;
+}
+
+.exec-upload-modal-hdr h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.exec-upload-modal-body {
+  padding: 20px;
+}
+
+.exec-upload-desc {
+  font-size: .82rem;
+  color: var(--text-sec);
+  margin-bottom: 14px;
+}
+
+.exec-upload-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.exec-upload-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 10px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .2s;
+  text-align: center;
+}
+
+.exec-upload-card:hover {
+  border-color: var(--cyan);
+  background: rgba(0, 188, 212, .04);
+  transform: translateY(-2px);
+}
+
+.exec-upload-card.has-file {
+  border-color: #22c55e;
+  border-style: solid;
+  background: rgba(34, 197, 94, .04);
+}
+
+.exec-uc-icon {
+  font-size: 1.5rem;
+}
+
+.exec-uc-name {
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.exec-uc-file {
+  font-size: .68rem;
+  color: var(--text-sec);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  white-space: nowrap;
+}
+
+.exec-upload-submit {
+  width: 100%;
+  margin-top: 14px;
 }

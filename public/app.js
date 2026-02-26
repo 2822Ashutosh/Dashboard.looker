@@ -614,7 +614,7 @@ async function fetchExecData() {
     if (!token) return;
     const h = { Authorization: 'Bearer ' + token };
     try {
-        const [summary, kpi, sow, gov, leave, ftr, health] = await Promise.all([
+        const [summary, kpi, sow, gov, leave, ftr, health, team] = await Promise.all([
             fetch('/api/exec/summary', { headers: h }).then(r => r.json()),
             fetch('/api/exec/kpi-scorecards', { headers: h }).then(r => r.json()),
             fetch('/api/exec/sow-financial', { headers: h }).then(r => r.json()),
@@ -622,22 +622,28 @@ async function fetchExecData() {
             fetch('/api/exec/leave-impact', { headers: h }).then(r => r.json()),
             fetch('/api/exec/ftr-metrics', { headers: h }).then(r => r.json()),
             fetch('/api/exec/project-health', { headers: h }).then(r => r.json()),
+            fetch('/api/exec/team-capacity', { headers: h }).then(r => r.json()),
         ]);
-        renderExecKPIs(summary);
+        renderExecKPIs(summary, gov);
         renderExecFTEChart(gov);
         renderExecKPIChart(kpi);
         renderExecSOWChart(sow);
+        renderExecRolesChart(team);
+        renderExecQAChart(ftr);
+        renderExecLeaveChart(leave);
         renderExecRiskPanel(gov);
         renderExecLeavePanel(leave);
         renderExecHealthTable(health);
         renderExecHL(gov);
+        const ts = document.getElementById('execLastRefresh');
+        if (ts) ts.textContent = new Date().toLocaleTimeString();
     } catch (err) {
         console.error('Exec fetch error:', err);
     }
 }
 
 // ── KPI Cards ────────────────────────────────────────────────────
-function renderExecKPIs(d) {
+function renderExecKPIs(d, gov) {
     if (!d) return;
     const el = id => document.getElementById(id);
     el('valTeamSize').textContent = d.teamSize || 0;
@@ -646,6 +652,9 @@ function renderExecKPIs(d) {
     el('valKPIMetRate').textContent = d.kpiMetRate ? d.kpiMetRate + '%' : '—';
     el('valFTRRating').textContent = d.ftrAvgRating ? d.ftrAvgRating + '%' : '—';
     el('valOnLeave').textContent = d.onLeaveToday || 0;
+    el('valActiveRisks').textContent = d.activeRisks || 0;
+    const sowRcv = gov?.highlights?.filter(h => h.highlight)?.length || '—';
+    el('valSOWReceived').textContent = sowRcv;
 }
 function fmtCurrency(v) { return v >= 1e6 ? '$' + (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + (v / 1e3).toFixed(0) + 'K' : '$' + v; }
 
@@ -763,3 +772,51 @@ async function execConnectUrls() {
     } catch (e) { st.className = 'exec-src-status error'; st.textContent = '✗ ' + e.message; }
 }
 
+// ── NEW: Role Distribution Chart (Team Details) ─────────────────
+let execChartRoles = null;
+function renderExecRolesChart(teamData) {
+    const ctx = document.getElementById('chartRoles');
+    if (!ctx) return;
+    const roles = teamData?.roleDistribution || {};
+    const labels = Object.keys(roles), values = Object.values(roles);
+    const colors = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ec4899', '#3b82f6', '#ef4444', '#14b8a6'];
+    if (execChartRoles) execChartRoles.destroy();
+    execChartRoles = new Chart(ctx, { type: 'pie', data: { labels, datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, padding: 8 } } } } });
+}
+
+// ── NEW: QA Rating by Project (FTR Tracker) ─────────────────────
+let execChartQA = null;
+function renderExecQAChart(ftrData) {
+    const ctx = document.getElementById('chartQA');
+    if (!ctx) return;
+    const accounts = ftrData?.accounts || [];
+    const labels = accounts.slice(0, 8).map(a => (a.account || '').slice(0, 18));
+    const values = accounts.slice(0, 8).map(a => a.avgRating || 0);
+    if (execChartQA) execChartQA.destroy();
+    execChartQA = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: 'Avg QA %', data: values, backgroundColor: values.map(v => v >= 90 ? '#22c55e' : v >= 75 ? '#f59e0b' : '#ef4444'), borderRadius: 6 }] }, options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { max: 100 } } } });
+}
+
+// ── NEW: Top Leave Takers Chart (Leave Tracker) ─────────────────
+let execChartLeave = null;
+function renderExecLeaveChart(leaveData) {
+    const ctx = document.getElementById('chartLeave');
+    if (!ctx) return;
+    const byP = leaveData?.currentMonth?.byPerson || {};
+    const sorted = Object.entries(byP).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const labels = sorted.map(([n]) => n.split(' ').slice(0, 2).join(' '));
+    const values = sorted.map(([, c]) => c);
+    if (execChartLeave) execChartLeave.destroy();
+    execChartLeave = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: 'Leave Days', data: values, backgroundColor: '#f59e0b', borderRadius: 6 }] }, options: { responsive: true, plugins: { legend: { display: false } } } });
+}
+
+// ── Upload Card File Labels ─────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.exec-upload-card input[type="file"]').forEach(inp => {
+        inp.addEventListener('change', () => {
+            const lbl = inp.closest('.exec-upload-card').querySelector('.exec-uc-file');
+            const card = inp.closest('.exec-upload-card');
+            if (inp.files.length) { lbl.textContent = inp.files[0].name; card.classList.add('has-file'); }
+            else { lbl.textContent = 'No file'; card.classList.remove('has-file'); }
+        });
+    });
+});
