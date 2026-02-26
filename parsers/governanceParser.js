@@ -1,137 +1,146 @@
+/**
+ * Governance Parser
+ * Sheets: "Highlights & Low lights", "QBR", "FTE", "Risks and Mitigation", "Audits"
+ * All sheets have headers at R0.
+ */
 const XLSX = require('xlsx');
 
-/**
- * Parse Governance Sample.xlsx
- * Sheets: "Highlights & Low lights", "QBR", "FTE", "Risks and Mitigation", "Audits"
- */
 function parseGovernance(filePath) {
     const wb = XLSX.readFile(filePath);
+    const result = {
+        highlights: [], lowlights: [], qbr: [], fte: [],
+        risks: [], audits: [],
+        summary: { activeRisks: 0, totalAudits: 0 },
+    };
 
-    // ── Highlights & Lowlights ────────────────────────────
-    const highlights = [];
-    const hlSheet = wb.Sheets['Highlights & Low lights'];
+    // ── Highlights & Lowlights ──
+    const hlSheet = findSheet(wb, ['Highlights & Low lights', 'Highlights', 'Highlights & Lowlights']);
     if (hlSheet) {
         const rows = XLSX.utils.sheet_to_json(hlSheet, { defval: '' });
+        let currentPM = '', currentProject = '', currentMonth = '';
         rows.forEach(r => {
-            const pm = (r['Project Manager'] || '').toString().trim();
-            if (!pm) return;
-            highlights.push({
-                pm,
-                project: (r['Project'] || '').toString().trim(),
-                month: (r['Month'] || '').toString().trim(),
-                highlight: (r['Highlight'] || '').toString().trim(),
-                lowlight: (r['Lowlight'] || '').toString().trim(),
+            const pm = r['Project Manager'] || r[Object.keys(r)[0]] || '';
+            if (pm.trim()) currentPM = pm.trim();
+            const proj = r['Project'] || '';
+            if (proj.trim()) currentProject = proj.trim();
+            const month = r['Month'] || '';
+            if (month.trim()) currentMonth = month.trim();
+
+            const hl = String(r['Highlight'] || '').trim();
+            const ll = String(r['Lowlight'] || '').trim();
+            if (hl) result.highlights.push({ pm: currentPM, project: currentProject, month: currentMonth, highlight: hl });
+            if (ll) result.lowlights.push({ pm: currentPM, project: currentProject, month: currentMonth, lowlight: ll });
+        });
+    }
+
+    // ── QBR ──
+    const qbrSheet = findSheet(wb, ['QBR']);
+    if (qbrSheet) {
+        const rows = XLSX.utils.sheet_to_json(qbrSheet, { defval: '' });
+        rows.forEach(r => {
+            const account = r['Account'] || '';
+            if (!account.trim()) return;
+            result.qbr.push({
+                account: account.trim(),
+                pms: r['PMs'] || '',
+                offshoreLeads: r['Offshore Leads'] || '',
+                deliveryLeads: r['Delivery Leads'] || '',
+                startDate: excelDate(r['Project Start date']),
+                qbrStartDate: excelDate(r['QBR Start Date']),
+                deliveryType: r['QBR Delivery Type'] || '',
+                comments: r['Comments'] || '',
             });
         });
     }
 
-    // ── Risks and Mitigation ──────────────────────────────
-    const risks = [];
-    const riskSheet = wb.Sheets['Risks and Mitigation'];
-    if (riskSheet) {
-        const rows = XLSX.utils.sheet_to_json(riskSheet, { defval: '' });
-        rows.forEach(r => {
-            const project = (r['Project'] || '').toString().trim();
-            if (!project) return;
-            risks.push({
-                month: (r['Month'] || '').toString().trim(),
-                week: (r['Week'] || '').toString().trim(),
-                pm: (r['Project Manager'] || '').toString().trim(),
-                project,
-                risk: (r['Risks'] || '').toString().trim(),
-                owner: (r['Owner'] || '').toString().trim(),
-                rootCause: (r['Root cause'] || '').toString().trim(),
-                mitigation: (r['Mitigation Steps'] || '').toString().trim(),
-                impact: (r['Impact'] || '').toString().trim(),
-                status: (r['Status'] || '').toString().trim(),
-            });
-        });
-    }
-
-    // ── Audits ────────────────────────────────────────────
-    const audits = [];
-    const auditSheet = wb.Sheets['Audits'];
-    if (auditSheet) {
-        const rows = XLSX.utils.sheet_to_json(auditSheet, { defval: '' });
-        rows.forEach(r => {
-            const project = (r['Project'] || '').toString().trim();
-            if (!project) return;
-            audits.push({
-                month: (r['Month'] || '').toString().trim(),
-                pm: (r['Project Manager'] || '').toString().trim(),
-                project,
-                details: (r['Audit details'] || '').toString().trim(),
-                closureDate: formatExcelDate(r['Audit Closure Date']),
-            });
-        });
-    }
-
-    // ── FTE Trend ─────────────────────────────────────────
-    const fteTrend = [];
-    const fteSheet = wb.Sheets['FTE'];
+    // ── FTE ──
+    const fteSheet = findSheet(wb, ['FTE']);
     if (fteSheet) {
-        const rows = XLSX.utils.sheet_to_json(fteSheet, { header: 1, defval: '' });
-        // Row 0 = header (months as serial numbers), Row 1 = labels, subsequent rows = data
-        if (rows.length > 2) {
-            const headerRow = rows[0];
-            for (let i = 1; i < headerRow.length; i++) {
-                const monthSerial = headerRow[i];
-                if (typeof monthSerial === 'number') {
-                    const d = XLSX.SSF.parse_date_code(monthSerial);
-                    const monthLabel = `${d.y}-${String(d.m).padStart(2, '0')}`;
-                    // Sum all non-empty numeric values in this column from data rows
-                    let totalFTE = 0;
-                    for (let r = 2; r < rows.length; r++) {
-                        const val = Number(rows[r][i]);
-                        if (!isNaN(val)) totalFTE += val;
-                    }
-                    fteTrend.push({ month: monthLabel, totalFTE });
-                }
+        const raw = XLSX.utils.sheet_to_json(fteSheet, { header: 1, defval: '' });
+        if (raw.length >= 3) {
+            // R0: labels with month serial numbers, R1: "Total FTE on ground" repeating, R2+: account data
+            const monthHeaders = raw[0].slice(1).map(v => {
+                if (typeof v === 'number') return excelDate(v);
+                return String(v);
+            });
+            for (let i = 2; i < raw.length; i++) {
+                const account = String(raw[i][0] || '').trim();
+                if (!account) continue;
+                const monthlyFTE = {};
+                raw[i].slice(1).forEach((v, idx) => {
+                    if (monthHeaders[idx]) monthlyFTE[monthHeaders[idx]] = parseNum(v);
+                });
+                result.fte.push({ account, monthlyFTE });
             }
         }
     }
 
-    // ── QBR Schedule ──────────────────────────────────────
-    const qbrSchedule = [];
-    const qbrSheet = wb.Sheets['QBR'];
-    if (qbrSheet) {
-        const rows = XLSX.utils.sheet_to_json(qbrSheet, { defval: '' });
+    // ── Risks & Mitigation ──
+    const riskSheet = findSheet(wb, ['Risks and Mitigation', 'Risks']);
+    if (riskSheet) {
+        const rows = XLSX.utils.sheet_to_json(riskSheet, { defval: '' });
         rows.forEach(r => {
-            const account = (r['Account'] || '').toString().trim();
-            if (!account) return;
-            qbrSchedule.push({
-                account,
-                pms: (r['PMs'] || '').toString().trim(),
-                offshoreLeads: (r['Offshore Leads'] || '').toString().trim(),
-                deliveryLeads: (r['Delivery Leads'] || '').toString().trim(),
-                deliveryType: (r['QBR Delivery Type'] || '').toString().trim(),
-                comments: (r['Comments'] || '').toString().trim(),
+            const risk = r['Risks'] || r['Risk'] || '';
+            const project = r['Project'] || '';
+            if (!project.trim()) return;
+            result.risks.push({
+                month: r['Month'] || '',
+                week: r['Week'] || '',
+                pm: r['Project Manager'] || '',
+                project: project.trim(),
+                description: risk.trim(),
+                owner: r['Owner'] || '',
+                rootCause: r['Root cause'] || '',
+                mitigation: r['Mitigation Steps'] || '',
+                impact: r['Impact'] || '',
+                status: r['Status'] || '',
             });
         });
+        result.summary.activeRisks = result.risks.filter(r =>
+            r.status.toLowerCase() === 'ongoing' && r.description.toLowerCase() !== 'no risk'
+        ).length;
     }
 
-    return {
-        highlights,
-        risks,
-        audits,
-        fteTrend,
-        qbrSchedule,
-        summary: {
-            totalHighlights: highlights.length,
-            totalRisks: risks.length,
-            activeRisks: risks.filter(r => r.status.toLowerCase() === 'ongoing').length,
-            totalAudits: audits.length,
-        },
-    };
+    // ── Audits ──
+    const auditSheet = findSheet(wb, ['Audits', 'Audit']);
+    if (auditSheet) {
+        const rows = XLSX.utils.sheet_to_json(auditSheet, { defval: '' });
+        rows.forEach(r => {
+            const pm = r['Project Manager'] || '';
+            if (!pm.trim()) return;
+            result.audits.push({
+                month: r['Month'] || '',
+                pm: pm.trim(),
+                project: r['Project'] || '',
+                details: r['Audit details'] || '',
+                findings: r['Details'] || '',
+                closureDate: excelDate(r['Audit Closure Date']),
+            });
+        });
+        result.summary.totalAudits = result.audits.length;
+    }
+
+    return result;
 }
 
-function formatExcelDate(val) {
-    if (!val) return '';
-    if (typeof val === 'number') {
-        const d = XLSX.SSF.parse_date_code(val);
-        return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+function findSheet(wb, names) {
+    for (const n of names) {
+        const found = wb.SheetNames.find(s => s.toLowerCase().trim() === n.toLowerCase().trim());
+        if (found) return wb.Sheets[found];
     }
-    return val.toString().trim();
+    // Fuzzy match
+    for (const n of names) {
+        const found = wb.SheetNames.find(s => s.toLowerCase().includes(n.toLowerCase()));
+        if (found) return wb.Sheets[found];
+    }
+    return null;
+}
+
+function parseNum(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
+function excelDate(v) {
+    if (!v) return '';
+    if (typeof v === 'number') return new Date((v - 25569) * 86400000).toISOString().slice(0, 10);
+    return String(v);
 }
 
 module.exports = { parseGovernance };

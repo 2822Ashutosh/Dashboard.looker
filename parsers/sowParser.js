@@ -1,80 +1,77 @@
+/**
+ * SOW & PO Tracker Parser
+ * Sheets: "FTE Projects SOW & PO" (R0=header), "POC and Unitized Projects SOW" (R0=header), "Sheet1" (R0=header)
+ * All sheets have: PM Name, Client, Sub Project, Project Name, Total SOW Value, SOW Status, etc.
+ */
 const XLSX = require('xlsx');
 
-/**
- * Parse SOW and PO Tracker 2026 Sample.xlsx
- * Sheets: "FTE Projects SOW & PO", "POC and Unitized Projects SOW", "Sheet1"
- */
 function parseSOW(filePath) {
     const wb = XLSX.readFile(filePath);
-    const projects = [];
+    const result = { projects: [], summary: { activeProjects: 0, totalSOWValue: 0, sowReceived: 0, poReceived: 0 } };
 
-    // ── Parse a SOW sheet ─────────────────────────────────
-    function parseSOWSheet(sheetName, category) {
-        const ws = wb.Sheets[sheetName];
+    wb.SheetNames.forEach(sn => {
+        const ws = wb.Sheets[sn];
         if (!ws) return;
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        rows.forEach(r => {
-            const projectName = (r['Project Name'] || '').toString().trim();
-            if (!projectName) return;
-            const totalSOW = parseFloat(r['Total SOW Value']) || 0;
-            const deRevenue = parseFloat(r['DE Revenue Share']) || 0;
-            projects.push({
-                category,
-                pm: (r['PM Name'] || '').toString().trim(),
-                client: (r['Client'] || '').toString().trim(),
-                subProject: (r['Sub Project'] || '').toString().trim(),
-                projectId: (r['MySheets Project ID '] || '').toString().trim(),
-                projectName,
-                totalSOWValue: totalSOW,
-                deRevenueShare: deRevenue,
-                startDate: formatExcelDate(r['Project Start Date']),
-                endDate: formatExcelDate(r['Project End Date']),
-                sowStatus: (r['SOW Status'] || '').toString().trim(),
-                poStatus: (r['PO Status'] || '').toString().trim(),
-                projectStatus: (r['Project Status'] || '').toString().trim(),
-                comments: (r['Comments'] || '').toString().trim(),
+        const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (raw.length < 2) return;
+
+        // Find header row (first row that has PM/Client/Project in it)
+        let headerIdx = -1;
+        for (let i = 0; i < Math.min(5, raw.length); i++) {
+            const joined = raw[i].map(c => String(c).toLowerCase()).join('|');
+            if (joined.includes('pm') && (joined.includes('client') || joined.includes('project'))) {
+                headerIdx = i; break;
+            }
+        }
+        if (headerIdx < 0) return;
+
+        const headers = raw[headerIdx].map(h => String(h).trim());
+        const col = name => {
+            const idx = headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+            return idx;
+        };
+
+        for (let i = headerIdx + 1; i < raw.length; i++) {
+            const r = raw[i];
+            const pm = String(r[col('PM')] || '').trim();
+            const client = String(r[col('Client')] || '').trim();
+            const projectName = String(r[col('Project Name')] || r[col('Sub Project')] || '').trim();
+            if (!projectName && !client) continue;
+
+            const sowValue = parseNum(r[col('Total SOW')]);
+            const sowStatus = String(r[col('SOW Status')] || '').trim();
+            const poStatus = String(r[col('PO Status')] || '').trim();
+            const projectStatus = String(r[col('Project Status')] || '').trim();
+
+            result.projects.push({
+                pm, client, projectName: projectName || client,
+                subProject: String(r[col('Sub Project')] || '').trim(),
+                mysheetsPID: String(r[col('MySheets')] || '').trim(),
+                sowValue,
+                deRevenueShare: parseNum(r[col('DE Revenue')]),
+                startDate: excelDate(r[col('Project Start')]),
+                endDate: excelDate(r[col('Project End')]),
+                sowStatus: sowStatus || 'Unknown',
+                poStatus: poStatus || 'Unknown',
+                projectStatus: projectStatus || 'Active',
+                sheet: sn,
             });
-        });
-    }
 
-    parseSOWSheet('FTE Projects SOW & PO', 'FTE');
-    parseSOWSheet('POC and Unitized Projects SOW', 'POC');
-
-    // ── Computed KPIs ─────────────────────────────────────
-    const totalSOWValue = projects.reduce((s, p) => s + p.totalSOWValue, 0);
-    const totalRevenueShare = projects.reduce((s, p) => s + p.deRevenueShare, 0);
-    const sowReceived = projects.filter(p => p.sowStatus.toLowerCase() === 'received').length;
-    const poReceived = projects.filter(p => p.poStatus.toLowerCase() === 'received').length;
-    const activeProjects = projects.filter(p => p.projectStatus.toLowerCase() === 'in progress').length;
-    const total = projects.length || 1;
-
-    const projectsByStatus = {};
-    projects.forEach(p => {
-        const st = p.projectStatus || 'Unknown';
-        projectsByStatus[st] = (projectsByStatus[st] || 0) + 1;
+            result.summary.totalSOWValue += sowValue;
+            if (sowStatus.toLowerCase() === 'received') result.summary.sowReceived++;
+            if (poStatus.toLowerCase() === 'received') result.summary.poReceived++;
+        }
     });
 
-    return {
-        projects,
-        summary: {
-            totalProjects: projects.length,
-            activeProjects,
-            totalSOWValue,
-            totalRevenueShare,
-            sowReceivedPct: Math.round((sowReceived / total) * 100),
-            poReceivedPct: Math.round((poReceived / total) * 100),
-            projectsByStatus,
-        },
-    };
+    result.summary.activeProjects = result.projects.length;
+    return result;
 }
 
-function formatExcelDate(val) {
-    if (!val) return '';
-    if (typeof val === 'number') {
-        const d = XLSX.SSF.parse_date_code(val);
-        return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
-    }
-    return val.toString().trim();
+function parseNum(v) { const n = Number(String(v).replace(/[$,]/g, '')); return isNaN(n) ? 0 : n; }
+function excelDate(v) {
+    if (!v) return '';
+    if (typeof v === 'number') return new Date((v - 25569) * 86400000).toISOString().slice(0, 10);
+    return String(v);
 }
 
 module.exports = { parseSOW };

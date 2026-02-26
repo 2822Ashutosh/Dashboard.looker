@@ -1,87 +1,95 @@
+/**
+ * FTR Tracker Parser
+ * Reads: "Account Details" (engagement info), "Bayer Quality Metrics " (QA data per project)
+ * Headers at Row 0 in both sheets.
+ */
 const XLSX = require('xlsx');
 
-/**
- * Parse FTR Tracker.xlsx
- * Sheets: "Account Details" (engagement metadata), "Bayer Quality Metrics" (QA data)
- */
 function parseFTR(filePath) {
     const wb = XLSX.readFile(filePath);
+    const result = { accounts: [], qaMetrics: [], summary: { avgRating: 0, totalProjects: 0, totalPassed: 0 } };
 
-    // ── Account Details ───────────────────────────────────
-    const accounts = [];
-    const accSheet = wb.Sheets['Account Details'];
+    // ── Sheet 1: Account Details ──
+    const accSheet = wb.Sheets[wb.SheetNames[0]];
     if (accSheet) {
         const rows = XLSX.utils.sheet_to_json(accSheet, { defval: '' });
         rows.forEach(r => {
-            if (r['Engagement Name']) {
-                accounts.push({
-                    engagement: (r['Engagement Name'] || '').toString().trim(),
-                    qaTracking: (r['QA Metrics Tracking'] || '').toString().trim(),
-                    expectedProjects: (r['Expected projects per month'] || '').toString().trim(),
-                    dataLayerType: (r['Datalayer/DOM scrapping'] || '').toString().trim(),
-                    webTeam: (r['Web team- Internal/External'] || '').toString().trim(),
-                });
-            }
-        });
-    }
-
-    // ── Bayer Quality Metrics ─────────────────────────────
-    const metrics = [];
-    const qmSheet = wb.Sheets['Bayer Quality Metrics '] || wb.Sheets['Bayer Quality Metrics'];
-    if (qmSheet) {
-        const rows = XLSX.utils.sheet_to_json(qmSheet, { defval: '' });
-        rows.forEach(r => {
-            const projectName = (r['Project Name'] || '').toString().trim();
-            if (!projectName) return;
-            const totalTags = Number(r['Total Tags']) || 0;
-            const totalFailed = Number(r['Total Failed']) || 0;
-            const rating = Number(r['Rating']) || 0;
-            metrics.push({
-                project: projectName,
-                qaDate: formatExcelDate(r['QA Date']),
-                global: Number(r['Global']) || 0,
-                globalFailed: Number(r['Global Failed']) || 0,
-                inpage: Number(r['Inpage']) || 0,
-                inpageFailed: Number(r['Inpage Failed']) || 0,
-                form: Number(r['Form']) || 0,
-                formFailed: Number(r['Form Failed']) || 0,
-                videos: Number(r['Videos']) || 0,
-                videosFailed: Number(r['Videos Failed']) || 0,
-                totalTags,
-                totalFailed,
-                rating,
+            const name = r['Engagement Name'] || r[Object.keys(r)[0]] || '';
+            if (!name || !name.trim()) return;
+            result.accounts.push({
+                account: name.trim(),
+                qaTracking: r['QA Metrics Tracking'] || '',
+                expectedProjects: r['Expected projects per month'] || '',
+                scrapping: r['Datalayer/DOM scrapping'] || '',
+                webTeam: r['Web team- Internal/External'] || '',
+                comments: r['Comments'] || '',
             });
         });
     }
 
-    // ── Computed KPIs ─────────────────────────────────────
-    const totalProjects = metrics.length;
-    const avgRating = totalProjects > 0
-        ? metrics.reduce((s, m) => s + m.rating, 0) / totalProjects
-        : 0;
-    const passCount = metrics.filter(m => m.rating >= 0.95).length;
-    const ftrPassRate = totalProjects > 0 ? passCount / totalProjects : 0;
+    // ── Sheet 2+: Quality Metrics (any sheet with "Quality" or "Metrics" in name) ──
+    wb.SheetNames.forEach(sn => {
+        if (sn === wb.SheetNames[0]) return; // skip Account Details
+        const ws = wb.Sheets[sn];
+        if (!ws) return;
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        rows.forEach(r => {
+            const proj = r['Project Name'] || r[Object.keys(r)[0]] || '';
+            if (!proj || !proj.trim()) return;
 
-    return {
-        accounts,
-        metrics,
-        summary: {
-            totalProjects,
-            avgRating: Math.round(avgRating * 10000) / 100,
-            ftrPassRate: Math.round(ftrPassRate * 10000) / 100,
-            totalTagsChecked: metrics.reduce((s, m) => s + m.totalTags, 0),
-            totalFailed: metrics.reduce((s, m) => s + m.totalFailed, 0),
-        },
-    };
+            const global = parseNum(r['Global']);
+            const globalFailed = parseNum(r['Global Failed']);
+            const inpage = parseNum(r['Inpage']);
+            const inpageFailed = parseNum(r['Inpage Failed']);
+            const form = parseNum(r['Form']);
+            const formFailed = parseNum(r['Form Failed']);
+            const videos = parseNum(r['Videos']);
+            const videosFailed = parseNum(r['Videos Failed']);
+
+            const total = global + inpage + form + videos;
+            const failed = globalFailed + inpageFailed + formFailed + videosFailed;
+            const passRate = total > 0 ? Math.round(((total - failed) / total) * 10000) / 100 : 100;
+
+            result.qaMetrics.push({
+                project: proj.trim(),
+                qaDate: excelDate(r['QA Date']),
+                global, globalFailed, inpage, inpageFailed,
+                form, formFailed, videos, videosFailed,
+                total, failed, passRate,
+            });
+        });
+    });
+
+    // Summary
+    if (result.qaMetrics.length > 0) {
+        const rates = result.qaMetrics.map(m => m.passRate);
+        result.summary.avgRating = Math.round(rates.reduce((a, b) => a + b, 0) / rates.length * 100) / 100;
+        result.summary.totalProjects = result.qaMetrics.length;
+        result.summary.totalPassed = result.qaMetrics.filter(m => m.failed === 0).length;
+    }
+
+    // Map avgRating to accounts
+    result.accounts.forEach(acc => {
+        const metrics = result.qaMetrics.filter(m =>
+            m.project.toLowerCase().includes(acc.account.toLowerCase().split(' ')[0])
+        );
+        acc.avgRating = metrics.length > 0
+            ? Math.round(metrics.reduce((s, m) => s + m.passRate, 0) / metrics.length * 100) / 100
+            : 0;
+        acc.ftrPass = metrics.filter(m => m.failed === 0).length + '/' + metrics.length;
+    });
+
+    return result;
 }
 
-function formatExcelDate(val) {
-    if (!val) return '';
-    if (typeof val === 'number') {
-        const d = XLSX.SSF.parse_date_code(val);
-        return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+function parseNum(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
+function excelDate(v) {
+    if (!v) return '';
+    if (typeof v === 'number') {
+        const d = new Date((v - 25569) * 86400000);
+        return d.toISOString().slice(0, 10);
     }
-    return val.toString().trim();
+    return String(v);
 }
 
 module.exports = { parseFTR };

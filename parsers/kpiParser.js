@@ -1,61 +1,98 @@
+/**
+ * KPI Parser
+ * Sheets: "KPI" (main KPI data, R0=header), "Sheet2" (Highlights/Lowlights — same format as Governance)
+ * KPI headers: No., BU Name, Department Name, Service Line, Account Name, Metric Name, KPI/Metric Name, Description, Formula, Target, Actual, Status, etc.
+ */
 const XLSX = require('xlsx');
 
-/**
- * Parse KPI Sample.xlsx
- * Sheet "KPI": 30 metrics with target, actual, status
- */
 function parseKPI(filePath) {
     const wb = XLSX.readFile(filePath);
+    const result = { metrics: [], kpis: [], summary: { metRate: 0, totalMetrics: 0, metCount: 0 }, highlights: [], lowlights: [] };
 
-    const kpis = [];
-    const ws = wb.Sheets['KPI'];
-    if (ws) {
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        rows.forEach(r => {
-            const metricName = (r['Metric Name (Standardized)'] || r['KPI / Metric Name ( as per Biz )'] || '').toString().trim();
-            if (!metricName) return;
+    // ── Main KPI sheet ──
+    const kpiSheet = wb.Sheets[wb.SheetNames[0]];
+    if (kpiSheet) {
+        const raw = XLSX.utils.sheet_to_json(kpiSheet, { header: 1, defval: '' });
+        if (raw.length < 2) return result;
 
-            const target = parseFloat(r['Target ']) || parseFloat(r['Target']) || 0;
-            const actual = parseFloat(r['Actuals of Metrics Performance']) || 0;
-            const status = (r['Status (Met/Not met/NA)'] || '').toString().trim();
+        // Find header row (contains "Account" or "Metric")
+        let headerIdx = 0;
+        for (let i = 0; i < Math.min(5, raw.length); i++) {
+            const joined = raw[i].map(c => String(c).toLowerCase()).join('|');
+            if (joined.includes('metric') || joined.includes('account')) { headerIdx = i; break; }
+        }
 
-            kpis.push({
-                no: r['No.'] || '',
-                buName: (r['BU Name'] || '').toString().trim(),
-                department: (r['Department Name'] || '').toString().trim(),
-                account: (r['Account Name (Standardized)'] || '').toString().trim(),
-                metricName,
-                metricDescription: (r['Metric Description'] || '').toString().trim(),
-                formula: (r['Metrics Definition (Formula)'] || '').toString().trim(),
-                frequency: (r['Frequency of Measurement'] || '').toString().trim(),
-                unit: (r['Unit of Measurement'] || '').toString().trim(),
-                dataSource: (r['Data Source'] || '').toString().trim(),
-                partOfSOW: (r['Part of SOW ? ( Y/N)'] || '').toString().trim(),
-                target,
-                actual,
+        const headers = raw[headerIdx].map(h => String(h).trim());
+        const col = name => headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+
+        for (let i = headerIdx + 1; i < raw.length; i++) {
+            const r = raw[i];
+            const accountIdx = col('Account Name');
+            const metricIdx = col('Metric Name');
+            const kpiNameIdx = col('KPI');
+            const targetIdx = col('Target');
+            const actualIdx = col('Actual');
+            const statusIdx = col('Status');
+
+            const account = accountIdx >= 0 ? String(r[accountIdx] || '').trim() : '';
+            const metric = metricIdx >= 0 ? String(r[metricIdx] || '').trim() : '';
+            if (!account && !metric) continue;
+
+            const target = targetIdx >= 0 ? r[targetIdx] : '';
+            const actual = actualIdx >= 0 ? r[actualIdx] : '';
+            const status = statusIdx >= 0 ? String(r[statusIdx] || '').trim() : '';
+
+            const kpiName = kpiNameIdx >= 0 ? String(r[kpiNameIdx] || '').trim() : metric;
+            const description = col('Metric Description') >= 0 ? String(r[col('Metric Description')] || '').trim() : '';
+            const formula = col('Formula') >= 0 ? String(r[col('Formula')] || '').trim() : '';
+
+            result.metrics.push({
+                account, metric, name: kpiName, description, formula,
+                target: parseTarget(target), actual: parseTarget(actual),
+                targetRaw: String(target), actualRaw: String(actual),
                 status,
-                htbOrLtb: (r['HTB or LTB'] || '').toString().trim(),
-                poc: (r['POC from Ops team'] || '').toString().trim(),
             });
+            result.kpis.push({
+                account, metric: kpiName || metric,
+                target: parseTarget(target), actual: parseTarget(actual), status,
+            });
+        }
+
+        // Summary
+        result.summary.totalMetrics = result.metrics.length;
+        result.summary.metCount = result.metrics.filter(m =>
+            m.status.toLowerCase().includes('met') || m.status.toLowerCase().includes('achieved') ||
+            m.status.toLowerCase().includes('green') || (m.actual >= m.target && m.target > 0)
+        ).length;
+        result.summary.metRate = result.summary.totalMetrics > 0
+            ? Math.round(result.summary.metCount / result.summary.totalMetrics * 100)
+            : 0;
+    }
+
+    // ── Sheet2: Highlights/Lowlights (if present) ──
+    const sheet2 = wb.Sheets[wb.SheetNames[1]];
+    if (sheet2) {
+        const rows = XLSX.utils.sheet_to_json(sheet2, { defval: '' });
+        let currentPM = '', currentProject = '', currentMonth = '';
+        rows.forEach(r => {
+            const pm = r['Project Manager'] || ''; if (pm.trim()) currentPM = pm.trim();
+            const proj = r['Project'] || ''; if (proj.trim()) currentProject = proj.trim();
+            const month = r['Month'] || ''; if (month.trim()) currentMonth = month.trim();
+            const hl = String(r['Highlight'] || '').trim();
+            const ll = String(r['Lowlight'] || '').trim();
+            if (hl) result.highlights.push({ pm: currentPM, project: currentProject, month: currentMonth, highlight: hl });
+            if (ll) result.lowlights.push({ pm: currentPM, project: currentProject, month: currentMonth, lowlight: ll });
         });
     }
 
-    // ── Computed KPIs ─────────────────────────────────────
-    const scored = kpis.filter(k => k.status && k.status.toLowerCase() !== 'na');
-    const metCount = scored.filter(k => k.status.toLowerCase().includes('met') && !k.status.toLowerCase().includes('not')).length;
-    const notMetCount = scored.filter(k => k.status.toLowerCase().includes('not met')).length;
-    const metRate = scored.length > 0 ? Math.round((metCount / scored.length) * 100) : 0;
+    return result;
+}
 
-    return {
-        kpis,
-        summary: {
-            totalKPIs: kpis.length,
-            scoredKPIs: scored.length,
-            metCount,
-            notMetCount,
-            metRate,
-        },
-    };
+function parseTarget(v) {
+    if (!v && v !== 0) return 0;
+    const s = String(v).replace(/[%$,]/g, '').trim();
+    const n = Number(s);
+    return isNaN(n) ? 0 : n;
 }
 
 module.exports = { parseKPI };
