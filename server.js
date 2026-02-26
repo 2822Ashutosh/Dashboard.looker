@@ -1,11 +1,29 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const { verifyToken, signToken } = require('./middleware/auth');
+const execData = require('./services/execDataService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ── Multer config for Excel uploads ───────────────────────────────
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const upload = multer({
+  dest: uploadDir,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (['.xlsx', '.xlsb', '.xls'].includes(ext)) cb(null, true);
+    else cb(new Error('Only Excel files (.xlsx, .xlsb, .xls) are allowed'));
+  },
+});
 
 app.use(cors());
 app.use(express.json());
@@ -291,12 +309,193 @@ app.get('/api/source-status', (req, res) => {
   });
 });
 
+// ══════════════════════════════════════════════════════════════════
+//  PHASE 2: AUTHENTICATION
+// ══════════════════════════════════════════════════════════════════
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const validUser = process.env.MANAGER_USER || 'admin';
+    const passHash = process.env.MANAGER_PASS_HASH || '';
+
+    if (username !== validUser) {
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
+    const match = await bcrypt.compare(password, passHash);
+    if (!match) {
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
+    const token = signToken({ username, role: 'manager' });
+    res.json({ success: true, token, expiresIn: '30m' });
+  } catch (err) {
+    console.error('Login error:', err.message);
+    res.status(500).json({ error: 'Login failed.' });
+  }
+});
+
+app.get('/api/auth/verify', verifyToken, (req, res) => {
+  res.json({ valid: true, user: req.user });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  PHASE 2: EXECUTIVE APIs (all JWT-protected)
+// ══════════════════════════════════════════════════════════════════
+
+app.get('/api/exec/summary', verifyToken, (req, res) => {
+  try {
+    res.json(execData.computeSummary());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/exec/team-capacity', verifyToken, (req, res) => {
+  try {
+    const team = execData.getData('team');
+    const leave = execData.getData('leave');
+    res.json({ team: team || {}, leave: leave || {} });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/exec/kpi-scorecards', verifyToken, (req, res) => {
+  try {
+    const kpi = execData.getData('kpi');
+    res.json(kpi || { kpis: [], summary: {} });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/exec/sow-financial', verifyToken, (req, res) => {
+  try {
+    const sow = execData.getData('sow');
+    res.json(sow || { projects: [], summary: {} });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/exec/governance-risks', verifyToken, (req, res) => {
+  try {
+    const gov = execData.getData('governance');
+    res.json(gov || { highlights: [], risks: [], audits: [], fteTrend: [], qbrSchedule: [], summary: {} });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/exec/leave-impact', verifyToken, (req, res) => {
+  try {
+    const leave = execData.getData('leave');
+    res.json(leave || { currentMonth: {}, previousMonth: {} });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/exec/ftr-metrics', verifyToken, (req, res) => {
+  try {
+    const ftr = execData.getData('ftr');
+    res.json(ftr || { accounts: [], metrics: [], summary: {} });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/exec/project-health', verifyToken, (req, res) => {
+  try {
+    const health = execData.computeProjectHealth();
+    res.json(health);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Upload Excel files for executive dashboard ────────────────────
+const execUploadFields = upload.fields([
+  { name: 'ftr', maxCount: 1 },
+  { name: 'team', maxCount: 1 },
+  { name: 'sow', maxCount: 1 },
+  { name: 'governance', maxCount: 1 },
+  { name: 'leave', maxCount: 1 },
+  { name: 'kpi', maxCount: 1 },
+]);
+
+app.post('/api/exec/upload-sources', verifyToken, (req, res) => {
+  execUploadFields(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    try {
+      const uploaded = [];
+      for (const [key, files] of Object.entries(req.files || {})) {
+        if (files && files[0]) {
+          const ext = path.extname(files[0].originalname).toLowerCase();
+          const newPath = path.join(uploadDir, `${key}${ext}`);
+          fs.renameSync(files[0].path, newPath);
+          execData.setUploadedFile(key, newPath);
+          uploaded.push(key);
+        }
+      }
+      await execData.loadAll();
+      res.json({ success: true, uploaded, message: `${uploaded.length} file(s) uploaded & data refreshed.` });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+});
+
+// ── Connect SharePoint/cloud URLs ─────────────────────────────────
+app.post('/api/exec/connect-sources', verifyToken, async (req, res) => {
+  try {
+    const { sources } = req.body; // { ftr: { url, type }, team: { url, type }, ... }
+    if (!sources || typeof sources !== 'object') {
+      return res.status(400).json({ error: 'Sources object is required.' });
+    }
+    const connected = [];
+    for (const [key, cfg] of Object.entries(sources)) {
+      if (cfg.url) {
+        execData.setRemoteSource(key, cfg.url, cfg.type || 'sharepoint');
+        connected.push(key);
+      }
+    }
+    await execData.loadAll();
+    res.json({ success: true, connected, message: `${connected.length} source(s) connected & data refreshed.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/exec/source-status', verifyToken, (req, res) => {
+  res.json(execData.getSourceStatus());
+});
+
+// ── Executive data manual refresh ─────────────────────────────────
+app.post('/api/exec/refresh', verifyToken, async (req, res) => {
+  try {
+    await execData.loadAll();
+    res.json({ success: true, message: 'Data refreshed.', lastRefresh: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Fallback → SPA ───────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Dashboard server running at http://localhost:${PORT}`);
   console.log(`Excel path: ${EXCEL_PATH}`);
+  // Load executive data sources on startup
+  try {
+    await execData.loadAll();
+    console.log('Executive data sources loaded on startup.');
+  } catch (e) {
+    console.warn('Could not load exec data on startup:', e.message);
+  }
 });
