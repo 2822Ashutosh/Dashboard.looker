@@ -25,7 +25,7 @@
   <header id="main-header">
     <h1>Digital Enablement Team - Daily Standup Updates</h1>
     <div class="header-actions">
-      <button id="btnRefresh" class="header-btn" title="Refresh data now">
+      <button id="btnRefresh" class="header-btn phase1-only" title="Refresh data now">
         <svg class="icon-spin" viewBox="0 0 24 24" width="16" height="16">
           <path d="M17.65 6.35A7.96 7.96 0 0012 4a8 8 0 00-8 8 8 8 0 008 8 7.99 7.99 0 007.35-4.82" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -34,7 +34,7 @@
         </svg>
         Refresh
       </button>
-      <button id="btnPresent" class="header-btn" title="Enter presentation mode">
+      <button id="btnPresent" class="header-btn phase1-only" title="Enter presentation mode">
         <svg viewBox="0 0 24 24" width="16" height="16">
           <rect x="2" y="3" width="20" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
           <line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="2" />
@@ -42,7 +42,7 @@
         </svg>
         Present
       </button>
-      <button id="btnDataSource" class="header-btn" title="Connect data source">
+      <button id="btnDataSource" class="header-btn phase1-only" title="Connect data source">
         <svg viewBox="0 0 24 24" width="16" height="16">
           <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" />
@@ -57,8 +57,8 @@
       <button id="btnExecLogout" class="header-btn header-btn-danger exec-only" style="display:none" title="Logout">
         🔓 Logout
       </button>
-      <span id="refreshBadge" class="refresh-badge">Auto-refresh: <strong>5 min</strong></span>
-      <span id="lastUpdated" class="last-updated"></span>
+      <span id="refreshBadge" class="refresh-badge phase1-only">Auto-refresh: <strong>5 min</strong></span>
+      <span id="lastUpdated" class="last-updated phase1-only"></span>
     </div>
   </header>
 
@@ -401,6 +401,59 @@
         </table>
       </div>
     </div>
+
+    <!-- ── TRACKER LINKS ── -->
+    <div class="exec-trackers">
+      <div class="exec-trackers-hdr">
+        <h3>🔗 Tracker Links</h3>
+        <button id="btnAddTracker" class="exec-action-btn">+ Add Tracker</button>
+      </div>
+      <div id="trackerLinksGrid" class="exec-trackers-grid">
+        <a class="exec-tracker-card" href="#" data-key="ftr" target="_blank">
+          <span class="exec-tc-icon">📊</span><span class="exec-tc-name">FTR Tracker</span><span
+            class="exec-tc-url">Click to set link</span>
+        </a>
+        <a class="exec-tracker-card" href="#" data-key="team" target="_blank">
+          <span class="exec-tc-icon">👥</span><span class="exec-tc-name">Team Details</span><span
+            class="exec-tc-url">Click to set link</span>
+        </a>
+        <a class="exec-tracker-card" href="#" data-key="sow" target="_blank">
+          <span class="exec-tc-icon">💰</span><span class="exec-tc-name">SOW & PO Tracker</span><span
+            class="exec-tc-url">Click to set link</span>
+        </a>
+        <a class="exec-tracker-card" href="#" data-key="governance" target="_blank">
+          <span class="exec-tc-icon">📋</span><span class="exec-tc-name">Governance</span><span
+            class="exec-tc-url">Click to set link</span>
+        </a>
+        <a class="exec-tracker-card" href="#" data-key="leave" target="_blank">
+          <span class="exec-tc-icon">🏖️</span><span class="exec-tc-name">Leave Tracker</span><span
+            class="exec-tc-url">Click to set link</span>
+        </a>
+        <a class="exec-tracker-card" href="#" data-key="kpi" target="_blank">
+          <span class="exec-tc-icon">🎯</span><span class="exec-tc-name">KPI Tracker</span><span
+            class="exec-tc-url">Click to set link</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ── TRACKER EDIT MODAL ── -->
+    <div id="trackerEditModal" class="modal-overlay" style="display:none">
+      <div class="login-modal-card" style="width:420px">
+        <div class="login-modal-header" style="padding:16px 20px 12px">
+          <h2 id="trackerEditTitle">Edit Tracker Link</h2>
+          <p>Set the name and URL for this tracker</p>
+        </div>
+        <div class="login-modal-body">
+          <div class="login-field"><label>Tracker Name</label><input id="trackerEditName" type="text"
+              placeholder="e.g. FTR Tracker" /></div>
+          <div class="login-field"><label>Tracker URL</label><input id="trackerEditUrl" type="url"
+              placeholder="https://sharepoint.com/..." /></div>
+          <button id="trackerEditSave" class="login-submit-btn">Save Link</button>
+        </div>
+        <div class="login-modal-footer"><button id="trackerEditCancel" class="login-cancel-btn">Cancel</button></div>
+      </div>
+    </div>
+
     <div class="exec-hl-row">
       <div class="exec-panel">
         <div class="exec-panel-title">🌟 Recent Highlights</div>
@@ -447,7 +500,8 @@
       </div>
     </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="app.js"></script>
 </body>
+
 </html>

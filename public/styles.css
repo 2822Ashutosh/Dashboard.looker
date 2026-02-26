@@ -2315,3 +2315,21 @@ footer {
   width: 100%;
   margin-top: 14px;
 }
+/* Tracker Links */
+.exec-trackers { margin-bottom: 16px; }
+.exec-trackers-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.exec-trackers-hdr h3 { font-size: 1rem; font-weight: 700; color: var(--text); margin: 0; }
+.exec-trackers-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.exec-tracker-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 10px 14px; background: #fff; border: 1px solid var(--border); border-radius: 12px; text-decoration: none; cursor: pointer; transition: all .25s; text-align: center; position: relative; overflow: hidden; }
+.exec-tracker-card::before { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #06b6d4, #a855f7); opacity: 0; transition: opacity .2s; }
+.exec-tracker-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,.1); border-color: var(--cyan); }
+.exec-tracker-card:hover::before { opacity: 1; }
+.exec-tracker-card.active { border-color: #22c55e; }
+.exec-tracker-card.active::before { background: #22c55e; opacity: 1; }
+.exec-tc-icon { font-size: 1.6rem; }
+.exec-tc-name { font-size: .78rem; font-weight: 700; color: var(--text); }
+.exec-tc-url { font-size: .62rem; color: var(--text-sec); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1100px) { .exec-trackers-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px) { .exec-trackers-grid { grid-template-columns: repeat(2, 1fr); } }
+.exec-kpi { cursor: pointer; }
+.exec-kpi:active { transform: scale(.97); }

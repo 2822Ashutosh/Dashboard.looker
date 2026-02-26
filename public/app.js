@@ -599,12 +599,23 @@ function execLogout() {
     document.getElementById('execSection').style.display = 'none';
     document.getElementById('btnManagerLogin').style.display = '';
     document.getElementById('btnExecLogout').style.display = 'none';
+    // Show Phase 1 back
+    document.getElementById('dashboard').style.display = '';
+    document.getElementById('main-footer').style.display = '';
+    document.querySelectorAll('.phase1-only').forEach(el => el.style.display = '');
+    document.querySelector('#main-header h1').textContent = 'Digital Enablement Team - Daily Standup Updates';
 }
 
 function showExecDashboard() {
+    // Hide Phase 1 completely
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('main-footer').style.display = 'none';
+    document.querySelectorAll('.phase1-only').forEach(el => el.style.display = 'none');
+    // Show exec
     document.getElementById('execSection').style.display = 'block';
     document.getElementById('btnManagerLogin').style.display = 'none';
     document.getElementById('btnExecLogout').style.display = '';
+    document.querySelector('#main-header h1').textContent = 'Executive Dashboard — Strategic Overview';
     fetchExecData();
 }
 
@@ -820,3 +831,70 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+
+//  Tracker Links Edit Logic 
+(function initTrackers() {
+    const STORAGE_KEY = 'exec_tracker_links';
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch {}
+
+    function loadTrackers() {
+        document.querySelectorAll('.exec-tracker-card').forEach(card => {
+            const key = card.dataset.key;
+            const info = saved[key];
+            if (info && info.url) {
+                card.href = info.url;
+                card.querySelector('.exec-tc-name').textContent = info.name || key;
+                try { card.querySelector('.exec-tc-url').textContent = new URL(info.url).hostname; } catch { card.querySelector('.exec-tc-url').textContent = info.url.slice(0,30); }
+                card.classList.add('active');
+            }
+        });
+    }
+
+    let editKey = null;
+    const modal = document.getElementById('trackerEditModal');
+    const nameInp = document.getElementById('trackerEditName');
+    const urlInp = document.getElementById('trackerEditUrl');
+    const titleEl = document.getElementById('trackerEditTitle');
+
+    document.querySelectorAll('.exec-tracker-card').forEach(card => {
+        card.addEventListener('click', e => {
+            const info = saved[card.dataset.key];
+            if (!info || !info.url) { e.preventDefault(); openEditModal(card.dataset.key); }
+        });
+        card.addEventListener('contextmenu', e => { e.preventDefault(); openEditModal(card.dataset.key); });
+    });
+
+    const addBtn = document.getElementById('btnAddTracker');
+    if (addBtn) addBtn.addEventListener('click', () => {
+        const firstEmpty = document.querySelector('.exec-tracker-card:not(.active)');
+        openEditModal(firstEmpty ? firstEmpty.dataset.key : 'ftr');
+    });
+
+    function openEditModal(key) {
+        editKey = key;
+        const card = document.querySelector('.exec-tracker-card[data-key="' + key + '"]');
+        if (titleEl) titleEl.textContent = 'Edit: ' + (card ? card.querySelector('.exec-tc-name').textContent : key);
+        if (nameInp) nameInp.value = (saved[key] && saved[key].name) || (card ? card.querySelector('.exec-tc-name').textContent : '');
+        if (urlInp) urlInp.value = (saved[key] && saved[key].url) || '';
+        if (modal) { modal.style.display = 'flex'; nameInp.focus(); }
+    }
+
+    const saveBtn = document.getElementById('trackerEditSave');
+    if (saveBtn) saveBtn.addEventListener('click', () => {
+        if (!editKey) return;
+        const name = nameInp.value.trim();
+        const url = urlInp.value.trim();
+        if (!url) { urlInp.style.border = '2px solid #ef4444'; return; }
+        saved[editKey] = { name: name || editKey, url: url };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        loadTrackers();
+        modal.style.display = 'none';
+    });
+
+    const cancelBtn = document.getElementById('trackerEditCancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => modal.style.display = 'none');
+    if (modal) modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+
+    document.addEventListener('DOMContentLoaded', loadTrackers);
+})();
