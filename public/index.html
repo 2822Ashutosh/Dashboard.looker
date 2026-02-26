@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Enablement Team - Daily Standup Updates</title>
+  <meta name="description"
+    content="Digital Enablement Team Dashboard — Daily standup updates, bandwidth tracker, and QBR reporting." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+  <!-- ════════ LOADING SPINNER ════════ -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <p>Loading dashboard data…</p>
+  </div>
+
+  <!-- ════════ HEADER ════════ -->
+  <header id="main-header">
+    <h1>Digital Enablement Team - Daily Standup Updates</h1>
+    <div class="header-actions">
+      <button id="btnRefresh" class="header-btn" title="Refresh data now">
+        <svg class="icon-spin" viewBox="0 0 24 24" width="16" height="16">
+          <path d="M17.65 6.35A7.96 7.96 0 0012 4a8 8 0 00-8 8 8 8 0 008 8 7.99 7.99 0 007.35-4.82" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <polyline points="17.65 2 17.65 6.35 13.3 6.35" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        Refresh
+      </button>
+      <button id="btnPresent" class="header-btn" title="Enter presentation mode">
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <rect x="2" y="3" width="20" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
+          <line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="2" />
+          <line x1="8" y1="21" x2="16" y2="21" stroke="currentColor" stroke-width="2" />
+        </svg>
+        Present
+      </button>
+      <button id="btnDataSource" class="header-btn" title="Connect data source">
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" />
+          <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" />
+        </svg>
+        Data Source
+      </button>
+      <span id="refreshBadge" class="refresh-badge">Auto-refresh: <strong>5 min</strong></span>
+      <span id="lastUpdated" class="last-updated"></span>
+    </div>
+  </header>
+
+  <!-- ════════ PRESENT MODE EXIT BAR ════════ -->
+  <div id="presentBar" class="present-bar hidden">
+    <span>📺 Presentation Mode</span>
+    <span id="presentTitle" class="present-title">Digital Enablement Team - Daily Standup Updates</span>
+    <button id="exitPresent" class="header-btn exit-btn">✕ Exit</button>
+  </div>
+
+  <!-- ════════ DATA SOURCE MODAL ════════ -->
+  <div id="dataSourceModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Connect Data Source</h2>
+        <button id="closeModal" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="source-option">
+          <div class="source-icon google-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28">
+              <path
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                fill="#4285F4" />
+              <path
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                fill="#34A853" />
+              <path
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z"
+                fill="#FBBC05" />
+              <path
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                fill="#EA4335" />
+            </svg>
+          </div>
+          <div class="source-info">
+            <h3>Google Sheets</h3>
+            <p>Connect using a published Google Sheets link (CSV export)</p>
+            <input id="googleSheetUrl" type="url"
+              placeholder="https://docs.google.com/spreadsheets/d/SHEET_ID/export?format=csv" />
+            <button class="btn-connect" onclick="connectSource('google')">Connect Google Sheet</button>
+          </div>
+        </div>
+        <div class="source-divider"><span>OR</span></div>
+        <div class="source-option">
+          <div class="source-icon sharepoint-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28">
+              <circle cx="12" cy="8" r="5" fill="#036C70" />
+              <circle cx="7" cy="16" r="4" fill="#1A9BA1" />
+              <circle cx="17" cy="16" r="4" fill="#37C6D0" />
+            </svg>
+          </div>
+          <div class="source-info">
+            <h3>SharePoint / OneDrive Excel</h3>
+            <p>Paste a SharePoint or OneDrive public link to an Excel file</p>
+            <input id="sharepointUrl" type="url" placeholder="https://yourorg.sharepoint.com/sites/.../file.xlsx" />
+            <button class="btn-connect" onclick="connectSource('sharepoint')">Connect Excel</button>
+          </div>
+        </div>
+        <div id="sourceStatus" class="source-status hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ MAIN GRID ════════ -->
+  <main id="dashboard">
+
+    <!-- ── LEFT SIDEBAR ── -->
+    <aside id="left-sidebar">
+      <div class="widget" id="dateRangeWidget">
+        <button id="dateRangeBtn" class="date-range-btn">
+          <span id="dateRangeLabel">Loading…</span>
+          <span class="caret">▾</span>
+        </button>
+        <div id="dateRangeDropdown" class="dropdown-panel hidden">
+          <label>From <input id="filterDateFrom" type="date" /></label>
+          <label>To <input id="filterDateTo" type="date" /></label>
+          <button id="applyDateRange" class="apply-btn">Apply</button>
+        </div>
+      </div>
+      <div class="widget info-widget">
+        <div class="widget-title">Project Details</div>
+        <div id="projectDetailsDisplay" class="widget-value">—</div>
+      </div>
+      <div class="widget info-widget">
+        <div class="widget-title">Project Manager</div>
+        <div id="pmDisplay" class="widget-value">—</div>
+      </div>
+      <div class="widget info-widget">
+        <div class="widget-title">Blockers / Dependencies</div>
+        <div id="blockersDisplay" class="widget-value">No data</div>
+      </div>
+      <div class="widget info-widget qbr-widget">
+        <div class="widget-title">MBR/QBR Date</div>
+        <div id="qbrDateDisplay" class="widget-value">—</div>
+      </div>
+    </aside>
+
+    <!-- ── CENTER ── -->
+    <section id="center-section">
+
+      <!-- Search Bar -->
+      <div class="search-bar">
+        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16">
+          <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2" fill="none" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2" />
+        </svg>
+        <input id="globalSearch" type="text" placeholder="Search across all data…" />
+      </div>
+
+      <!-- Team Table -->
+      <div class="table-card">
+        <div class="table-header">
+          <span class="th sortable" id="sortName">Team Details <span class="sort-arrow">▼</span></span>
+          <span class="th">Role</span>
+          <span class="th">Free Bandwidth</span>
+          <span class="th">Leave Status</span>
+        </div>
+        <div id="teamTableBody" class="table-body"></div>
+      </div>
+
+      <!-- Yesterday / Today Panels -->
+      <div class="twin-panels">
+        <div class="panel-card">
+          <div class="panel-header pink-gradient">What was done yesterday? <span class="panel-arrow">⬇</span></div>
+          <div id="yesterdayList" class="panel-body"></div>
+        </div>
+        <div class="panel-card">
+          <div class="panel-header pink-gradient">What will be done today? <span class="panel-arrow">⬆</span></div>
+          <div id="todayList" class="panel-body"></div>
+        </div>
+      </div>
+
+      <!-- ════════ FREE BANDWIDTH OVERVIEW ════════ -->
+      <div class="bw-overview-card">
+        <div class="bw-overview-header">
+          <span>📊 Free Bandwidth Overview</span>
+          <span id="bwOverviewSubtitle" class="bw-overview-sub">Person-wise bandwidth fill status</span>
+        </div>
+        <div class="bw-legend">
+          <span class="legend-item"><span class="legend-dot dot-full"></span>Full Day (On Leave)</span>
+          <span class="legend-item"><span class="legend-dot dot-half"></span>Half Day</span>
+          <span class="legend-item"><span class="legend-dot dot-partial"></span>Partial Bandwidth</span>
+          <span class="legend-item"><span class="legend-dot dot-avail"></span>Available</span>
+        </div>
+        <div id="bwOverviewBody" class="bw-overview-body"></div>
+      </div>
+
+    </section>
+
+    <!-- ── RIGHT SIDEBAR: PROJECT LIST ── -->
+    <aside id="right-sidebar">
+      <div class="project-card">
+        <div class="project-header">
+          <span class="collapse-icon">▬</span>
+          Project Name <span id="projectCount">(0)</span>
+        </div>
+        <div class="project-actions">
+          <button id="selectAll" class="chip-btn">Select All</button>
+          <button id="deselectAll" class="chip-btn">Deselect All</button>
+        </div>
+        <div id="projectCheckboxes" class="project-body"></div>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- ════════ FOOTER ════════ -->
+  <footer id="main-footer">
+    <div class="footer-left">
+      <span>Digital Enablement Team Dashboard &copy; 2025</span>
+    </div>
+    <div class="footer-right">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Indegene_Logo.png/220px-Indegene_Logo.png"
+        alt="Indegene" class="footer-logo" onerror="this.style.display='none'" />
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
