@@ -1,4 +1,4 @@
-﻿/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════
    Digital Enablement Team Dashboard — app.js
    ═══════════════════════════════════════════════════════════════ */
 
@@ -789,7 +789,7 @@ let execChartRoles = null;
 function renderExecRolesChart(teamData) {
     const ctx = document.getElementById('chartRoles');
     if (!ctx) return;
-    const roles = teamData?.roleDistribution || {};
+    const roles = (teamData?.team?.roleDistribution || teamData?.roleDistribution) || {};
     const labels = Object.keys(roles), values = Object.values(roles);
     const colors = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ec4899', '#3b82f6', '#ef4444', '#14b8a6'];
     if (execChartRoles) execChartRoles.destroy();
@@ -938,7 +938,7 @@ function renderKPIDetail(key) {
             const roles = d.roleDistribution || {};
             const labels = Object.keys(roles), vals = Object.values(roles);
             _kpiDetailChart = new Chart(ctx, { type:'doughnut', data:{ labels, datasets:[{ data:vals, backgroundColor:['#06b6d4','#a855f7','#22c55e','#f59e0b','#ec4899','#3b82f6','#ef4444','#14b8a6'] }] }, options:{ responsive:true, plugins:{ legend:{ position:'bottom' } } } });
-            const members = d.activeMembers || [];
+            const members = (d?.team?.activeMembers || d?.activeMembers) || [];
             tableDiv.innerHTML = '<table><thead><tr><th>Name</th><th>Role</th><th>Location</th></tr></thead><tbody>' + members.slice(0,15).map(m => '<tr><td>'+m.name+'</td><td>'+m.role+'</td><td>'+(m.location||'-')+'</td></tr>').join('') + '</tbody></table>';
         },
         projects: () => {
